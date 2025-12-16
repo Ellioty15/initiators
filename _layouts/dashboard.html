@@ -1179,6 +1179,7 @@ score += gists * 0.5
                     try{ loadPreferences(); } catch(e){}
                 })();
                 </script>
+            </div>
 
             <!-- Grade analytics tab content -->
             <div id="tab-content-grade-analytics" class="tab-content hidden">
@@ -1210,7 +1211,6 @@ score += gists * 0.5
 <!-- Your GitHub analytics JS integrated -->
 <script type="module">
     import { pythonURI, javaURI, fetchOptions } from '{{ site.baseurl }}/assets/js/api/config.js';
-    import { pythonURI, fetchOptions } from '{{ site.baseurl }}/assets/js/api/config.js';
     // styles API will be dynamically imported only when needed (avoids breaking pages when file is absent)
 
     const profileLinksUrl = `${pythonURI}/api/analytics/github/user/profile_links`;
@@ -1711,7 +1711,7 @@ score += gists * 0.5
     // call the function with your tab ids and initial tab
     document.addEventListener('DOMContentLoaded', function () {
         setupTabSwitcher(
-            ['github', 'grade', 'admin-search', 'help', 'grade-analytics'],
+            ['github', 'grade', 'admin-search', 'help', 'grade-analytics', 'your-feedback', 'preferences'],
             'github'
             );
     });
