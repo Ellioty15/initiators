@@ -13,7 +13,11 @@ layout: post
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <link rel="stylesheet" href="{{ '/assets/css/_main.css' | relative_url }}">
 
-<div class="timeline-page"> 
+<!-- Inbox sidebar wrapper container -->
+<div class="timeline-with-sidebar">
+  <!-- Main content area -->
+  <div class="timeline-main-content">
+    <div class="timeline-page"> 
 <div class="timeline-header">
   <h1>Course Timeline</h1>  
   <div class="timeline-filters">
@@ -952,3 +956,7 @@ layout: post
   });
 
 </script>
+    </div> <!-- End timeline-page -->
+  </div> <!-- End timeline-main-content -->
+  
+</div> <!-- End timeline-with-sidebar -->

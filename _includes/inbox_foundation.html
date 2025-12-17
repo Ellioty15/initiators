@@ -50,9 +50,28 @@
 
 <script type="module">
 import { pythonURI, fetchOptions } from '{{ site.baseurl }}/assets/js/api/config.js';
+import { 
+  createMessage, 
+  updateMessage, 
+  deleteMessage, 
+  getUserNotifications, 
+  markNotificationAsRead, 
+  markNotificationAsDismissed, 
+  getMessageReport 
+} from '{{ site.baseurl }}/assets/js/api/notification-api.js';
 
 // Store admin status globally for use in message rendering
 window.inboxUserIsAdmin = false;
+window.currentUserId = null;
+window.notificationAPI = {
+  createMessage,
+  updateMessage,
+  deleteMessage,
+  getUserNotifications,
+  markNotificationAsRead,
+  markNotificationAsDismissed,
+  getMessageReport
+};
 
 // Check if user is Admin and show inbox form
 async function checkInboxAdminAccess() {
@@ -61,6 +80,7 @@ async function checkInboxAdminAccess() {
     if (!res.ok) return;
     
     const user = await res.json();
+    window.currentUserId = user.id;
     const isAdmin = user.role === "Admin";
     window.inboxUserIsAdmin = isAdmin;
     
@@ -70,8 +90,13 @@ async function checkInboxAdminAccess() {
       
       if (inboxForm) inboxForm.style.display = 'block';
       if (inboxDivider) inboxDivider.style.display = 'block';
-      
-      // Show admin controls on existing messages
+    }
+    
+    // Load notifications from backend for all users
+    await window.loadUserNotifications();
+    
+    // Show admin controls on existing messages after loading
+    if (isAdmin) {
       document.querySelectorAll('.inbox-admin-controls').forEach(ctrl => {
         ctrl.style.display = 'flex';
       });
@@ -81,28 +106,65 @@ async function checkInboxAdminAccess() {
   }
 }
 
+// Load notifications from backend for non-admin users
+window.loadUserNotifications = async function() {
+  try {
+    if (!window.currentUserId) return;
+    
+    const notifications = await window.notificationAPI.getUserNotifications(window.currentUserId);
+    const messagesEl = document.getElementById('inbox-messages');
+    
+    if (!messagesEl) return;
+    
+    // Clear existing messages
+    messagesEl.innerHTML = '';
+    
+    if (notifications.length === 0) {
+      messagesEl.innerHTML = '<em style="color:var(--white); padding:0.5rem; display:block;">No announcements yet.</em>';
+      return;
+    }
+    
+    // Display each notification, newest first
+    notifications.reverse().forEach(notification => {
+      const messageEl = window.buildNotificationElement(notification);
+      messagesEl.appendChild(messageEl);
+    });
+    
+    window.updateBadgeFromNotifications();
+  } catch (err) {
+    console.error('Error loading user notifications:', err);
+  }
+};
+
 // Run admin check on load
 checkInboxAdminAccess();
+
+// Periodic refresh of notifications (every 30 seconds)
+setInterval(() => {
+  if (window.currentUserId) {
+    window.loadUserNotifications().catch(err => console.error('Periodic notification refresh failed:', err));
+  }
+}, 30000);
 
 // Inbox toggle (small FAB)
 const inboxToggle = document.getElementById('inbox-toggle-btn');
 const inboxPanel = document.getElementById('inbox-panel');
 const inboxCloseBtn = document.getElementById('inbox-close-btn');
 
-function openInboxPanel() {
+window.openInboxPanel = function() {
   inboxPanel.classList.add('open');
-}
-function closeInboxPanel() {
+};
+window.closeInboxPanel = function() {
   inboxPanel.classList.remove('open');
-}
+};
 if (inboxToggle) {
   inboxToggle.onclick = function(e) {
     e.stopPropagation();
     // toggle the compact inbox panel
-    if (inboxPanel.classList.contains('open')) closeInboxPanel(); else openInboxPanel();
+    if (inboxPanel.classList.contains('open')) window.closeInboxPanel(); else window.openInboxPanel();
   };
 }
-if (inboxCloseBtn) inboxCloseBtn.onclick = closeInboxPanel;
+if (inboxCloseBtn) inboxCloseBtn.onclick = window.closeInboxPanel;
 
 // Close inbox when clicking outside the panel
 document.addEventListener('click', (e) => {
@@ -110,7 +172,7 @@ document.addEventListener('click', (e) => {
   if (!inboxPanel.classList.contains('open')) return;
   if (e.target === inboxPanel || inboxPanel.contains(e.target)) return;
   if (inboxToggle && e.target === inboxToggle) return;
-  closeInboxPanel();
+  window.closeInboxPanel();
 });
 </script>
 
@@ -179,163 +241,245 @@ document.addEventListener('click', (e) => {
     linksContainer.innerHTML = '';
   });
 
-  form && form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const title = document.getElementById('inbox-title').value.trim();
-    const content = document.getElementById('inbox-content').value.trim();
-    if (!title || !content) return alert('Please provide title and content.');
+form && form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('inbox-title').value.trim();
+      const content = document.getElementById('inbox-content').value.trim();
+      if (!title || !content) return alert('Please provide title and content.');
 
-    const linkRows = Array.from(linksContainer.querySelectorAll('.inbox-link-row'));
-    const links = linkRows.map(r => {
-      const inputs = r.getElementsByTagName('input');
-      return { url: inputs[0].value.trim(), label: inputs[1].value.trim() };
-    }).filter(l => l.url);
+      const linkRows = Array.from(linksContainer.querySelectorAll('.inbox-link-row'));
+      const links = linkRows.map(r => {
+        const inputs = r.getElementsByTagName('input');
+        return { url: inputs[0].value.trim(), label: inputs[1].value.trim() };
+      }).filter(l => l.url);
 
-    // Build announcement object
-    const ann = { id: 'ann-' + Date.now() + '-' + Math.floor(Math.random()*1000), title, content, links, unread: true };
-
-    function buildMessageElement(announcement){
-      const el = document.createElement('div');
-      el.className = 'inbox-message' + (announcement.unread ? ' unread' : '');
-      el.dataset.annId = announcement.id;
-      el.dataset.unread = announcement.unread ? 'true' : 'false';
-      el.style.padding = '0.75rem';
-      el.style.border = '1px solid rgba(255,255,255,0.06)';
-      el.style.borderRadius = '6px';
-      el.style.marginBottom = '0.5rem';
-
-      const header = document.createElement('div');
-      header.style.display = 'flex';
-      header.style.justifyContent = 'space-between';
-      header.style.alignItems = 'center';
-
-      const h = document.createElement('div');
-      h.style.fontWeight = '700';
-      h.style.marginBottom = '0.25rem';
-      h.textContent = announcement.title;
-
-      const controls = document.createElement('div');
-      controls.className = 'inbox-admin-controls';
-      controls.style.display = 'none'; // Hidden by default, shown for admins
-      controls.style.gap = '0.5rem';
-      controls.style.alignItems = 'center';
-
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'microblog-btn';
-      editBtn.textContent = 'Edit';
-      editBtn.onclick = () => {
-        // populate form for editing
-        document.getElementById('inbox-title').value = announcement.title;
-        document.getElementById('inbox-content').value = announcement.content;
-        linksContainer.innerHTML = '';
-        (announcement.links || []).forEach(l => linksContainer.appendChild(createLinkRow(l.url, l.label)));
-        form.dataset.editingId = announcement.id;
-        // change submit label
-        const submitBtn = form.querySelector('button[type=submit]');
-        if (submitBtn) submitBtn.textContent = 'Save changes';
-        // open panel
-        openInboxPanel();
-      };
-
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'microblog-btn-cancel';
-      delBtn.textContent = 'Delete';
-      delBtn.onclick = () => {
-        if (confirm('Delete this announcement?')) {
-          el.remove();
-          updateBadge();
+      try {
+        const editingMessageId = form.dataset.editingMessageId;
+        let messageId = editingMessageId;
+        
+        if (editingMessageId) {
+          // Update existing message via API
+          await window.notificationAPI.updateMessage(editingMessageId, title, content, links);
+          delete form.dataset.editingMessageId;
+        } else {
+          // Create new message via API
+          const result = await window.notificationAPI.createMessage(title, content, links);
+          messageId = result.message_id;
+          console.log('Message created with ID:', messageId);
         }
-      };
 
-      const markDoneBtn = document.createElement('button');
-      markDoneBtn.type = 'button';
-      markDoneBtn.className = 'microblog-btn-done';
-      markDoneBtn.title = 'Mark as read';
-      markDoneBtn.setAttribute('aria-label', 'Mark as read');
-      markDoneBtn.innerHTML = '&#10003;';
-      markDoneBtn.onclick = () => {
-        // Mark as read: remove unread class and update dataset
-        const wasUnread = el.dataset.unread === 'true';
-        el.classList.remove('unread');
-        el.dataset.unread = 'false';
-        // visual toggle for done state
-        el.classList.toggle('inbox-done');
-        markDoneBtn.classList.toggle('done');
-        // Update badge if there are no more unread messages
-        if (wasUnread) updateBadge();
-      };
+        // Reload notifications from backend to get fresh state
+        await window.loadUserNotifications();
 
-      controls.appendChild(editBtn);
-      controls.appendChild(delBtn);
-      controls.appendChild(markDoneBtn);
-      
-      // Show controls if user is admin
-      if (window.inboxUserIsAdmin) {
-        controls.style.display = 'flex';
+        // Reset form
+        form.reset();
+        linksContainer.innerHTML = '';
+        const submitBtn = form.querySelector('button[type=submit]');
+        if (submitBtn) submitBtn.textContent = 'Post to Inbox';
+      } catch (err) {
+        console.error('Error submitting form:', err);
+        alert('Failed to submit message. Check console for details.');
       }
-
-      header.appendChild(h);
-      header.appendChild(controls);
-
-      const c = document.createElement('div');
-      c.style.marginBottom = '0.5rem';
-      c.innerHTML = announcement.content.replace(/\n/g, '<br>');
-
-      el.appendChild(header);
-      el.appendChild(c);
-
-      if ((announcement.links || []).length > 0) {
-        const ul = document.createElement('ul');
-        ul.style.margin = '0';
-        ul.style.paddingLeft = '1rem';
-        (announcement.links || []).forEach(l => {
-          const li = document.createElement('li');
-          const a = document.createElement('a');
-          a.href = l.url;
-          a.textContent = l.label || l.url;
-          a.target = '_blank';
-          a.rel = 'noopener noreferrer';
-          a.style.color = 'var(--white)';
-          a.style.textDecoration = 'underline';
-          li.appendChild(a);
-          ul.appendChild(li);
-        });
-        el.appendChild(ul);
-      }
-
-      return el;
-    }
-
-    // If editing existing announcement, update it
-    const editingId = form.dataset.editingId;
-    if (editingId) {
-      const existing = messagesEl.querySelector(`[data-ann-id="${editingId}"]`);
-      if (existing) {
-        const newEl = buildMessageElement(ann);
-        existing.replaceWith(newEl);
-      }
-      delete form.dataset.editingId;
-      const submitBtn = form.querySelector('button[type=submit]');
-      if (submitBtn) submitBtn.textContent = 'Post to Inbox';
-    } else {
-      // Prepend new message
-      const msgEl = buildMessageElement(ann);
-      if (messagesEl) {
-        const placeholder = messagesEl.querySelector('em');
-        if (placeholder) placeholder.remove();
-        // Prepend to ensure newest announcements appear first
-        if (messagesEl.prepend) messagesEl.prepend(msgEl); else messagesEl.insertBefore(msgEl, messagesEl.firstChild);
-      }
-      // Update badge with new unread count
-      updateBadge();
-    }
-
-    // reset form
-    form.reset();
-    linksContainer.innerHTML = '';
   });
 
 })();
+
+// Helper function to build notification elements from backend data
+window.buildNotificationElement = function(notification) {
+  const el = document.createElement('div');
+  el.className = 'inbox-message' + (!notification.is_read ? ' unread' : '');
+  el.dataset.notificationId = notification.notification_id;
+  el.dataset.messageId = notification.message_id;
+  el.dataset.unread = !notification.is_read ? 'true' : 'false';
+  el.style.padding = '0.75rem';
+  el.style.border = '1px solid rgba(255,255,255,0.06)';
+  el.style.borderRadius = '6px';
+  el.style.marginBottom = '0.5rem';
+
+  const header = document.createElement('div');
+  header.style.display = 'flex';
+  header.style.justifyContent = 'space-between';
+  header.style.alignItems = 'center';
+
+  const h = document.createElement('div');
+  h.style.fontWeight = '700';
+  h.style.marginBottom = '0.25rem';
+  h.textContent = notification.title;
+
+  const controls = document.createElement('div');
+  controls.className = 'inbox-admin-controls';
+  controls.style.display = 'none'; // Hidden by default, shown for admins
+  controls.style.gap = '0.5rem';
+  controls.style.alignItems = 'center';
+
+  // Admin: Edit button
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'microblog-btn';
+  editBtn.textContent = 'Edit';
+  editBtn.onclick = () => {
+    const form = document.getElementById('inbox-form');
+    const linksContainer = document.getElementById('inbox-links-container');
+    
+    // Populate form for editing
+    document.getElementById('inbox-title').value = notification.title;
+    document.getElementById('inbox-content').value = notification.content;
+    linksContainer.innerHTML = '';
+    (notification.links || []).forEach(l => {
+      const row = document.createElement('div');
+      row.className = 'inbox-link-row';
+      row.style.display = 'flex';
+      row.style.gap = '0.5rem';
+      row.style.marginTop = '0.25rem';
+      
+      const urlInput = document.createElement('input');
+      urlInput.type = 'url';
+      urlInput.value = l.url;
+      urlInput.style.flex = '1';
+      urlInput.className = 'microblog-input';
+      
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.value = l.label || '';
+      labelInput.style.width = '10rem';
+      labelInput.className = 'microblog-input';
+      
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'microblog-btn-cancel';
+      removeBtn.textContent = 'Remove';
+      removeBtn.onclick = () => row.remove();
+      
+      row.appendChild(urlInput);
+      row.appendChild(labelInput);
+      row.appendChild(removeBtn);
+      linksContainer.appendChild(row);
+    });
+    
+    form.dataset.editingMessageId = notification.message_id;
+    const submitBtn = form.querySelector('button[type=submit]');
+    if (submitBtn) submitBtn.textContent = 'Save changes';
+    window.openInboxPanel();
+  };
+
+  // Admin: Delete button
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.className = 'microblog-btn-cancel';
+  delBtn.textContent = 'Delete';
+  delBtn.onclick = async () => {
+    if (confirm('Delete this announcement?')) {
+      try {
+        await window.notificationAPI.deleteMessage(notification.message_id);
+        el.remove();
+        await window.updateBadgeFromNotifications();
+      } catch (err) {
+        console.error('Error deleting message:', err);
+        alert('Failed to delete message');
+      }
+    }
+  };
+
+  controls.appendChild(editBtn);
+  controls.appendChild(delBtn);
+  
+  // Show controls if user is admin
+  if (window.inboxUserIsAdmin) {
+    controls.style.display = 'flex';
+  }
+
+  // Mark as read button (for all users)
+  const markDoneBtn = document.createElement('button');
+  markDoneBtn.type = 'button';
+  markDoneBtn.className = 'microblog-btn-done';
+  markDoneBtn.title = 'Mark as read';
+  markDoneBtn.setAttribute('aria-label', 'Mark as read');
+  markDoneBtn.innerHTML = '&#10003;';
+  markDoneBtn.onclick = async () => {
+    try {
+      await window.notificationAPI.markNotificationAsRead(notification.notification_id);
+      const wasUnread = el.dataset.unread === 'true';
+      el.classList.remove('unread');
+      el.dataset.unread = 'false';
+      el.classList.toggle('inbox-done');
+      markDoneBtn.classList.toggle('done');
+      if (wasUnread) await window.updateBadgeFromNotifications();
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  };
+
+  // Dismiss button (for all users)
+  const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
+  dismissBtn.className = 'microblog-btn-cancel';
+  dismissBtn.title = 'Dismiss';
+  dismissBtn.setAttribute('aria-label', 'Dismiss');
+  dismissBtn.innerHTML = '&times;';
+  dismissBtn.style.padding = '0.25rem 0.5rem';
+  dismissBtn.style.fontSize = '1.2rem';
+  dismissBtn.onclick = async () => {
+    try {
+      await window.notificationAPI.markNotificationAsDismissed(notification.notification_id);
+      el.style.opacity = '0.5';
+      el.style.textDecoration = 'line-through';
+      dismissBtn.disabled = true;
+    } catch (err) {
+      console.error('Error dismissing notification:', err);
+    }
+  };
+
+  header.appendChild(h);
+  header.appendChild(controls);
+  header.appendChild(dismissBtn);
+  header.appendChild(markDoneBtn);
+
+  const c = document.createElement('div');
+  c.style.marginBottom = '0.5rem';
+  c.innerHTML = notification.content.replace(/\n/g, '<br>');
+
+  el.appendChild(header);
+  el.appendChild(c);
+
+  if ((notification.links || []).length > 0) {
+    const ul = document.createElement('ul');
+    ul.style.margin = '0';
+    ul.style.paddingLeft = '1rem';
+    (notification.links || []).forEach(l => {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = l.url;
+      a.textContent = l.label || l.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.style.color = 'var(--white)';
+      a.style.textDecoration = 'underline';
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+    el.appendChild(ul);
+  }
+
+  return el;
+};
+
+// Update badge based on backend notifications
+window.updateBadgeFromNotifications = async function() {
+  try {
+    if (!window.currentUserId) return;
+    
+    const notifications = await window.notificationAPI.getUserNotifications(window.currentUserId);
+    const badge = document.getElementById('inbox-badge');
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+    
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount > 9 ? '!' : unreadCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  } catch (err) {
+    console.error('Error updating badge:', err);
+  }
+};
 </script>
