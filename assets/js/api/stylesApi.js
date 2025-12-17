@@ -50,24 +50,43 @@ async function request(url, options = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
-export async function getStyle(personId) {
-  const url = `${API_BASE}/person/${encodeURIComponent(personId)}`;
-  return request(url, { method: 'GET' });
+// Simple wrapper for /api/styles/person/{uid}
+export async function request(path, opts = {}) {
+    try {
+        const res = await fetch(path, {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            ...opts
+        });
+        const text = await res.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+        return { ok: res.ok, status: res.status, data };
+    } catch (error) {
+        return { ok: false, status: 0, error };
+    }
 }
 
-export async function createStyle(personId, styleData) {
-  const url = `${API_BASE}/person/${encodeURIComponent(personId)}`;
-  return request(url, { method: 'POST', body: JSON.stringify(styleData) });
+export function getStyle(uid) {
+    return request(`/api/styles/person/${encodeURIComponent(uid)}`, { method: 'GET' });
 }
 
-export async function updateStyle(personId, styleData) {
-  const url = `${API_BASE}/person/${encodeURIComponent(personId)}`;
-  return request(url, { method: 'PUT', body: JSON.stringify(styleData) });
+export function createStyle(uid, styleData) {
+    return request(`/api/styles/person/${encodeURIComponent(uid)}`, {
+        method: 'POST',
+        body: JSON.stringify(styleData)
+    });
 }
 
-export async function deleteStyle(personId) {
-  const url = `${API_BASE}/person/${encodeURIComponent(personId)}`;
-  return request(url, { method: 'DELETE' });
+export function updateStyle(uid, styleData) {
+    return request(`/api/styles/person/${encodeURIComponent(uid)}`, {
+        method: 'PUT',
+        body: JSON.stringify(styleData)
+    });
+}
+
+export function deleteStyle(uid) {
+    return request(`/api/styles/person/${encodeURIComponent(uid)}`, { method: 'DELETE' });
 }
 
 export default {
