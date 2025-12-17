@@ -10,17 +10,17 @@ csp:
       - "GitHub Pages Launch"
       - "Learning Experience Design"
   1:
-    theme: "Tools & Equipment"
+    theme: "Essential Tools Setup"
     goals:
       - "Hardware & Workspace Setup"
-      - "Command Line Navigation"
       - "Developer Mindset"
+      - "VSCode, Linux, GitHub"
   2:
     theme: "Agile Methodologies"
     goals:
       - "Scrum + Standups"
-      - "Planning Boards"
-      - "GitHub Pages LxD Series"
+      - "Kanban Boards"
+      - "Retrospectives"
   3:
     theme: "Onboarding Adventure"
     goals:
@@ -72,9 +72,9 @@ csse:
   1:
     theme: "Essential Tools Setup"
     goals:
-      - "Linux + VSCode Setup"
-      - "GitHub Repository"
-      - "GitHub Pages Launch"
+      - "Hardware & Workspace Setup"
+      - "Developer Mindset"
+      - "VSCode, Linux, GitHub"
   2:
     theme: "Agile Development" 
     goals:
@@ -88,8 +88,14 @@ csse:
       - "Gamified Coding Tasks"
       - "Upperclassmen Mentorship"
   4:
-    theme: "JavaScript Student Teaching"
+    theme: "JavaScript Foundations and LxD"
     goals:
       - "Lesson Design"
       - "Classroom Teaching"
       - "Feedback and Grading"
+  5:
+    theme: "Draft Learning Experience" 
+    goals:
+      - "Pick Techincal Topic"
+      - "Learner Empathy"
+      - "Design a Lesson Plan"
