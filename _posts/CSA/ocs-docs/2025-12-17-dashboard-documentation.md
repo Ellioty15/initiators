@@ -20,5 +20,9 @@ permalink: /docs/dashboardbreakdown
 
 
 # the changes:
-- lines x-x: githubanalytics.html
-- lines x-x
+- lines 73-132: githubanalytics.html
+- lines 134-238: gradepredictor.html
+- lines 479-484: feedback.html
+- lines 488-604: dashboardhelp.html
+- lines 606-1216: preferences.html
+- lines 1218-1223: gradeanalytics.html
